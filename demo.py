@@ -4,13 +4,16 @@ import plazy
 
 @plazy.me
 def bar(expr):
+    print("In bar")
     assert isinstance(expr, plazy.Expr)
-    print(expr.locals)
-    print(expr.globals)
-    ...
-    # Can see that it was "x + 4"
-    # Can see that "x" was 7 (maybe expr.evaluate("x")?)
-    # Try to never evaluate stuff twice?
+
+    print("Expression:", expr.expr)
+    print("In this context, x is", expr.evaluate("x"))
+
+    if "/ 0" in expr.expr:
+        print("oh, detected bad operation, returning None instead")
+        return None
+
     y = expr.evaluate()
     return y
 
@@ -19,6 +22,9 @@ def bar(expr):
 def foo():
     x = 7
     c = collections.Counter()
-    print(bar(x + 4))
+    print("Calling bar")
+    print("bar result 1:", bar(x + 4))
+    x = 8
+    print("bar result 2:", bar(x / 0))
 
 foo()
