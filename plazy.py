@@ -55,7 +55,7 @@ def patch_tree(tree, globals):
             ID = uuid.uuid4().hex
             node.args = [
                 build_call(
-                    "plazy.Expr",
+                    "plazy.Arguments",
                     ID,
                     *(astunparse.unparse(arg).rstrip("\n") for arg in node.args),
                     **{
@@ -92,11 +92,11 @@ def me(fn):
     return wrapper
 
 
-class Expr:
+class Arguments:
     def __init__(self, ID, *args, **kwargs):
         self.ID = ID
-        self.arguments = args
-        self.keywords = kwargs
+        self.args = args
+        self.kwargs = kwargs
         caller_locals = inspect.currentframe().f_back.f_locals
         self.namespace = namespaces[self.ID]
         self.namespace.update(caller_locals)
@@ -107,14 +107,14 @@ class Expr:
             return self.evaluated[expr]
         if expr is not None:
             if isinstance(expr, int):
-                self.evaluated[expr] = eval(self.arguments[expr], self.namespace)
-            elif isinstance(expr, str) and expr in self.keywords:
-                self.evaluated[expr] = eval(self.keywords[expr], self.namespace)
+                self.evaluated[expr] = eval(self.args[expr], self.namespace)
+            elif isinstance(expr, str) and expr in self.kwargs:
+                self.evaluated[expr] = eval(self.kwargs[expr], self.namespace)
             else:
                 self.evaluated[expr] = eval(expr, self.namespace)
         else:
             # return tuple of all
-            for i, expr in enumerate(self.arguments):
+            for i, expr in enumerate(self.args):
                 self.evaluated[i] = eval(expr, self.namespace)
-            return tuple(self.evaluated[i] for i in range(len(self.arguments)))
+            return tuple(self.evaluated[i] for i in range(len(self.args)))
         return self.evaluated[expr]

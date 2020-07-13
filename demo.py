@@ -3,18 +3,18 @@ import plazy
 
 
 @plazy.me
-def bar(expr):
+def bar(arguments):
     print("In bar")
-    assert isinstance(expr, plazy.Expr)
+    assert isinstance(arguments, plazy.Arguments)
 
-    print("Arguments:", expr.arguments, "keywords:", expr.keywords)
-    print("In this context, x is", expr.evaluate("x"))
+    print("Arguments:", arguments.args, "keywords:", arguments.kwargs)
+    print("In this context, x is", arguments.evaluate("x"))
 
-    if "/ 0" in expr.arguments[0]:
+    if "/ 0" in arguments.args[0]:
         print("oh, detected bad operation, returning None instead")
         return None
 
-    y = expr.evaluate()
+    y = arguments.evaluate()
     return y
 
 
