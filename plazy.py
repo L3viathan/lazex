@@ -2,7 +2,8 @@ import ast
 import uuid
 import inspect
 import builtins
-from functools import wraps
+from functools import wraps, partial
+from collections import defaultdict
 
 import astunparse
 
@@ -51,7 +52,6 @@ def patch_tree(tree, globals):
             continue
         fn = get_obj_from_func(node.func, globals)
         if hasattr(fn, "__wrapped__") and fn.__wrapped__ in registry:
-            print("Patching")
             ID = uuid.uuid4().hex
             node.args = [
                 build_call(
@@ -61,7 +61,7 @@ def patch_tree(tree, globals):
                     **{
                         (k.arg or "__kw"): astunparse.unparse(k.value).rstrip("\n")
                         for k in node.keywords
-                    }
+                    },
                 )
             ]
             node.keywords = []
@@ -103,24 +103,74 @@ class Arguments:
         caller_locals = inspect.currentframe().f_back.f_locals
         self.namespace = namespaces[self.ID]
         self.namespace.update(caller_locals)
-        self.evaluated = {}
+        self.cache = defaultdict(dict)
 
-    def evaluate(self, expr=None):
-        if expr in self.evaluated:
-            return self.evaluated[expr]
+    def transform_one(self, expression, namespace, method="eval"):
+        if method == "eval":
+            return eval(expression, namespace)
+        elif method == "ast":
+            return ast.parse(expression).body[0].value
+        raise NotImplemented
+
+    def transform(self, expr=None, method="eval"):
+        if expr in self.cache[method]:
+            return self.cache[method][expr]
         if expr is not None:
             if isinstance(expr, int):
-                self.evaluated[expr] = eval(self.args[expr], self.namespace)
+                self.cache[method][expr] = self.transform_one(
+                    self.args[expr], self.namespace, method=method
+                )
             elif isinstance(expr, str) and expr in self.kwargs:
-                self.evaluated[expr] = eval(self.kwargs[expr], self.namespace)
+                self.cache[method][expr] = self.transform_one(
+                    self.kwargs[expr], self.namespace, method=method
+                )
             else:
-                self.evaluated[expr] = eval(expr, self.namespace)
+                self.cache[method][expr] = self.transform_one(
+                    expr, self.namespace, method=method
+                )
+            return self.cache[method][expr]
         else:
-            # return tuple of all
+            # return tuple of: args, kwargs, star_args, star_kwargs
+            res = []
+            part = []
             for i, expr in enumerate(self.args):
-                self.evaluated[i] = eval(expr, self.namespace)
-            return tuple(self.evaluated[i] for i in range(len(self.args)))
-        return self.evaluated[expr]
+                self.cache[method][i] = self.transform_one(
+                    expr, self.namespace, method=method
+                )
+                part.append(self.cache[method][i])
+            res.append(tuple(part))
+
+            part = {}
+            for k, expr in self.kwargs.items():
+                self.cache[method][k] = self.transform_one(
+                    expr, self.namespace, method=method
+                )
+                part[k] = self.cache[method][k]
+            res.append(part)
+
+            if self.star_args:
+                self.cache[method][self.star_args] = self.transform_one(
+                    self.star_args, self.namespace, method=method
+                )
+                res.append(self.cache[method][self.star_args])
+            else:
+                res.append(None)
+
+            if self.star_kwargs:
+                self.cache[method][self.star_kwargs] = self.transform_one(
+                    self.star_kwargs, self.namespace, method=method
+                )
+                res.append(self.cache[method][self.star_kwargs])
+            else:
+                res.append(None)
+
+            return tuple(res)
+
+    def evaluate(self, expr=None):
+        return self.transform(expr=expr, method="eval")
+
+    def ast(self, expr=None):
+        return self.transform(expr=expr, method="ast")
 
     def __repr__(self):
         parts = [
@@ -130,4 +180,3 @@ class Arguments:
             f"**{self.star_kwargs}" if self.star_kwargs else "",
         ]
         return "Arguments({})".format(", ".join(part for part in parts if part))
-
