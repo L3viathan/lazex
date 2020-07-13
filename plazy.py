@@ -59,7 +59,7 @@ def patch_tree(tree, globals):
                     ID,
                     *(astunparse.unparse(arg).rstrip("\n") for arg in node.args),
                     **{
-                        k.arg: astunparse.unparse(k.value).rstrip("\n")
+                        (k.arg or "__kw"): astunparse.unparse(k.value).rstrip("\n")
                         for k in node.keywords
                     }
                 )
@@ -95,8 +95,11 @@ def me(fn):
 class Arguments:
     def __init__(self, ID, *args, **kwargs):
         self.ID = ID
-        self.args = args
-        self.kwargs = kwargs
+        self.args = tuple(arg for arg in args if not arg.startswith("*"))
+        self.kwargs = {k: v for (k, v) in kwargs.items() if k != "__kw"}
+        star_args = [arg for arg in args if arg.startswith("*")]
+        self.star_args = star_args[0][1:] if star_args else None
+        self.star_kwargs = kwargs["__kw"] if "__kw" in kwargs else None
         caller_locals = inspect.currentframe().f_back.f_locals
         self.namespace = namespaces[self.ID]
         self.namespace.update(caller_locals)
@@ -118,3 +121,13 @@ class Arguments:
                 self.evaluated[i] = eval(expr, self.namespace)
             return tuple(self.evaluated[i] for i in range(len(self.args)))
         return self.evaluated[expr]
+
+    def __repr__(self):
+        parts = [
+            ", ".join(arg for arg in self.args),
+            f"*{self.star_args}" if self.star_args else "",
+            ", ".join(f"{k}={v}" for (k, v) in self.kwargs.items()),
+            f"**{self.star_kwargs}" if self.star_kwargs else "",
+        ]
+        return "Arguments({})".format(", ".join(part for part in parts if part))
+
