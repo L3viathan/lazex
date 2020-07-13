@@ -24,6 +24,26 @@ def get_obj_from_func(func, globals):
         return None
 
 
+def build_attribute_or_name(dotted_name):
+    *prefixes, last = dotted_name.split(".")
+    res = last
+    for prefix in prefixes:
+        res = ast.Attribute(ast.Name(prefix), res)
+    return res
+
+
+def build_call(dotted_name, ID, *args, **kwargs):
+    name = build_attribute_or_name(dotted_name)
+    arguments = [ast.Constant(ID, kind=None)]
+    arguments.extend(ast.Constant(arg, kind=None) for arg in args)
+    keywords = [ast.keyword(arg=k, value=Constant(v, kind=None)) for (k, v) in kwargs.items()]
+    return ast.Call(
+        name,
+        args=arguments,
+        keywords=keywords,
+    )
+
+
 def patch_tree(tree, globals):
     # Walk the tree and patch function calls.
     # How do we only replace function calls to patched functions?
@@ -35,15 +55,7 @@ def patch_tree(tree, globals):
             print("Patching")
             ID = uuid.uuid4().hex
             node.args = [
-                ast.Call(
-                    ast.Attribute(ast.Name("plazy"), "Expr"),
-                    args=[
-                        ast.Constant(
-                            f"{ID}@@{astunparse.unparse(node.args[0])}", kind=None
-                        )
-                    ],
-                    keywords=[],
-                )
+                build_call("plazy.Expr", ID, *(astunparse.unparse(arg) for arg in node.args))
             ]
             namespace = dict(builtins.__dict__)
             namespace.update(globals)
@@ -73,9 +85,10 @@ def me(fn):
 
 
 class Expr:
-    def __init__(self, expr):
+    def __init__(self, ID, *args):
+        self.ID = ID
+        self.arguments = args
         caller_locals = inspect.currentframe().f_back.f_locals
-        self.ID, _, self.expr = expr.partition("@@")
         self.namespace = namespaces[self.ID]
         self.namespace.update(caller_locals)
         self.evaluated = {}
@@ -83,5 +96,14 @@ class Expr:
     def evaluate(self, expr=None):
         if expr in self.evaluated:
             return self.evaluated[expr]
-        self.evaluated[expr] = eval(self.expr if expr is None else expr, self.namespace)
+        if expr is not None:
+            if isinstance(expr, int):
+                self.evaluated[expr] = eval(self.arguments[expr], self.namespace)
+            else:
+                self.evaluated[expr] = eval(expr, self.namespace)
+        else:
+            # return tuple of all
+            for i, expr in enumerate(self.arguments):
+                self.evaluated[i] = eval(expr, self.namespace)
+            return tuple(self.evaluated[i] for i in range(len(self.arguments)))
         return self.evaluated[expr]

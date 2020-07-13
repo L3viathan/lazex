@@ -7,10 +7,10 @@ def bar(expr):
     print("In bar")
     assert isinstance(expr, plazy.Expr)
 
-    print("Expression:", expr.expr)
+    print("Arguments:", expr.arguments)
     print("In this context, x is", expr.evaluate("x"))
 
-    if "/ 0" in expr.expr:
+    if "/ 0" in expr.arguments[0]:
         print("oh, detected bad operation, returning None instead")
         return None
 
@@ -25,6 +25,6 @@ def foo():
     print("Calling bar")
     print("bar result 1:", bar(x + 4))
     x = 8
-    print("bar result 2:", bar(x / 0))
+    print("bar result 2:", bar(x / 0, "hello"))
 
 foo()
