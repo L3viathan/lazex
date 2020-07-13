@@ -36,12 +36,11 @@ def build_call(dotted_name, ID, *args, **kwargs):
     name = build_attribute_or_name(dotted_name)
     arguments = [ast.Constant(ID, kind=None)]
     arguments.extend(ast.Constant(arg, kind=None) for arg in args)
-    keywords = [ast.keyword(arg=k, value=Constant(v, kind=None)) for (k, v) in kwargs.items()]
-    return ast.Call(
-        name,
-        args=arguments,
-        keywords=keywords,
-    )
+    keywords = [
+        ast.keyword(arg=k, value=ast.Constant(v, kind=None))
+        for (k, v) in kwargs.items()
+    ]
+    return ast.Call(name, args=arguments, keywords=keywords,)
 
 
 def patch_tree(tree, globals):
@@ -55,8 +54,17 @@ def patch_tree(tree, globals):
             print("Patching")
             ID = uuid.uuid4().hex
             node.args = [
-                build_call("plazy.Expr", ID, *(astunparse.unparse(arg) for arg in node.args))
+                build_call(
+                    "plazy.Expr",
+                    ID,
+                    *(astunparse.unparse(arg).rstrip("\n") for arg in node.args),
+                    **{
+                        k.arg: astunparse.unparse(k.value).rstrip("\n")
+                        for k in node.keywords
+                    }
+                )
             ]
+            node.keywords = []
             namespace = dict(builtins.__dict__)
             namespace.update(globals)
             namespaces[ID] = namespace
@@ -85,9 +93,10 @@ def me(fn):
 
 
 class Expr:
-    def __init__(self, ID, *args):
+    def __init__(self, ID, *args, **kwargs):
         self.ID = ID
         self.arguments = args
+        self.keywords = kwargs
         caller_locals = inspect.currentframe().f_back.f_locals
         self.namespace = namespaces[self.ID]
         self.namespace.update(caller_locals)
@@ -99,6 +108,8 @@ class Expr:
         if expr is not None:
             if isinstance(expr, int):
                 self.evaluated[expr] = eval(self.arguments[expr], self.namespace)
+            elif isinstance(expr, str) and expr in self.keywords:
+                self.evaluated[expr] = eval(self.keywords[expr], self.namespace)
             else:
                 self.evaluated[expr] = eval(expr, self.namespace)
         else:
