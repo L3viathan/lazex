@@ -1,4 +1,0 @@
-Change from giving one argument that contains all Arguments to natural amount
-of arguments, each wrapped in a single `Argument`.
-
-Will have to treat *args and **kwargs differently, maybe with __args and __kwargs kwargs.

@@ -6,9 +6,9 @@ import plazy
 def bar(*args, **kwargs):
     print("In bar")
     expr = args[0]
-    assert isinstance(expr, plazy.Argument)
+    assert isinstance(expr, plazy.Expression)
 
-    print("Arguments:", args, kwargs)
+    print("Expressions:", args, kwargs)
     print("In this context, x is", expr.evaluate("x"))
     print("ast:", expr.ast)
 

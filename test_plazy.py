@@ -10,7 +10,7 @@ def bar():
 
 def test_local_scope():
     x = 7
-    arg = plazy.Argument("x+3")
+    arg = plazy.Expression("x+3")
     assert arg.evaluate() == 10
 
 

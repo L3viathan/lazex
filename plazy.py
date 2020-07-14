@@ -1,8 +1,7 @@
 import ast
-import uuid
 import inspect
 import builtins
-from functools import wraps, partial
+from functools import wraps
 from collections import defaultdict
 
 import astunparse
@@ -47,21 +46,35 @@ def patch_tree(tree, globals):
             continue
         fn = get_obj_from_func(node.func, globals)
         if hasattr(fn, "__wrapped__") and fn.__wrapped__ in registry:
-            node.args = [
-                build_call("plazy.Argument", astunparse.unparse(arg).rstrip("\n"))
-                for arg in node.args
-            ]
             node.keywords = [
                 ast.keyword(
-                    (k.arg or "__kw"),
+                    (k.arg or "__kwargs"),
                     build_call(
-                        "plazy.Argument",
+                        "plazy.Expression",
                         astunparse.unparse(k.value).rstrip("\n"),
-                        (k.arg or "__kw"),
                     ),
                 )
                 for k in node.keywords
             ]
+            new_args = []
+            for arg in node.args:
+                unparsed = astunparse.unparse(arg).rstrip("\n")
+                if not unparsed.startswith("*"):
+                    new_args.append(
+                        build_call("plazy.Expression", unparsed)
+                    )
+                else:
+                    node.keywords.append(
+                        ast.keyword(
+                            "__args",
+                            build_call(
+                                "plazy.Expression",
+                                unparsed[1:],
+                            ),
+                        )
+                    )
+            node.args = new_args
+
     return tree
 
 
@@ -86,29 +99,28 @@ def me(fn):
     return wrapper
 
 
-class Argument:
-    def __init__(self, value, name=None):
+class Expression:
+    def __init__(self, value):
         self.escaped = value
-        self.name = name
         caller_frame = inspect.currentframe().f_back
         self.globals = caller_frame.f_globals
         self.locals = caller_frame.f_locals
-        self.cache = defaultdict(dict)
+        self._cache = defaultdict(dict)
 
     def transform_one(self, expression, method="eval"):
         if method == "eval":
             return eval(expression, self.globals, self.locals)
-        elif method == "ast":
+        if method == "ast":
             return ast.parse(expression).body[0].value
         raise NotImplementedError
 
     def transform(self, expr=None, method="eval"):
-        if expr in self.cache[method]:
-            return self.cache[method][expr]
+        if expr in self._cache[method]:
+            return self._cache[method][expr]
         if expr is None:
             expr = self.escaped
-        self.cache[method][expr] = self.transform_one(expr, method=method)
-        return self.cache[method][expr]
+        self._cache[method][expr] = self.transform_one(expr, method=method)
+        return self._cache[method][expr]
 
     def evaluate(self, expr=None):
         return self.transform(expr=expr, method="eval")
@@ -118,4 +130,4 @@ class Argument:
         return self.transform(expr=None, method="ast")
 
     def __repr__(self):
-        return f"Argument({self.name + '=' if self.name else ''}{self.escaped})"
+        return f"«{self.escaped}»"
