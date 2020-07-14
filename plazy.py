@@ -52,14 +52,16 @@ def patch_tree(tree, globals):
                 for arg in node.args
             ]
             node.keywords = [
-                build_call(
-                    "plazy.Argument",
-                    astunparse.unparse(k.value).rstrip("\n"),
+                ast.keyword(
                     (k.arg or "__kw"),
+                    build_call(
+                        "plazy.Argument",
+                        astunparse.unparse(k.value).rstrip("\n"),
+                        (k.arg or "__kw"),
+                    ),
                 )
                 for k in node.keywords
             ]
-            node.keywords = []
     return tree
 
 
@@ -116,4 +118,4 @@ class Argument:
         return self.transform(expr=None, method="ast")
 
     def __repr__(self):
-        return f"Argument({self.escaped})"
+        return f"Argument({self.name + '=' if self.name else ''}{self.escaped})"

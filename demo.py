@@ -3,11 +3,12 @@ import plazy
 
 
 @plazy.me
-def bar(expr, *args, **kwargs):
+def bar(*args, **kwargs):
     print("In bar")
+    expr = args[0]
     assert isinstance(expr, plazy.Argument)
 
-    print("Arguments:", args)
+    print("Arguments:", args, kwargs)
     print("In this context, x is", expr.evaluate("x"))
     print("ast:", expr.ast)
 
