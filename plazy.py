@@ -36,11 +36,7 @@ def build_call(dotted_name, *args, **kwargs):
     name = build_attribute_or_name(dotted_name)
     arguments = []
     arguments.extend(ast.Constant(arg, kind=None) for arg in args)
-    keywords = [
-        ast.keyword(arg=k, value=ast.Constant(v, kind=None))
-        for (k, v) in kwargs.items()
-    ]
-    return ast.Call(name, args=arguments, keywords=keywords,)
+    return ast.Call(name, args=arguments, keywords=[])
 
 
 def patch_tree(tree, globals):
@@ -52,14 +48,16 @@ def patch_tree(tree, globals):
         fn = get_obj_from_func(node.func, globals)
         if hasattr(fn, "__wrapped__") and fn.__wrapped__ in registry:
             node.args = [
+                build_call("plazy.Argument", astunparse.unparse(arg).rstrip("\n"))
+                for arg in node.args
+            ]
+            node.keywords = [
                 build_call(
-                    "plazy.Arguments",
-                    *(astunparse.unparse(arg).rstrip("\n") for arg in node.args),
-                    **{
-                        (k.arg or "__kw"): astunparse.unparse(k.value).rstrip("\n")
-                        for k in node.keywords
-                    },
+                    "plazy.Argument",
+                    astunparse.unparse(k.value).rstrip("\n"),
+                    (k.arg or "__kw"),
                 )
+                for k in node.keywords
             ]
             node.keywords = []
     return tree
@@ -86,13 +84,10 @@ def me(fn):
     return wrapper
 
 
-class Arguments:
-    def __init__(self, *args, **kwargs):
-        self.args = tuple(arg for arg in args if not arg.startswith("*"))
-        self.kwargs = {k: v for (k, v) in kwargs.items() if k != "__kw"}
-        star_args = [arg for arg in args if arg.startswith("*")]
-        self.star_args = star_args[0][1:] if star_args else None
-        self.star_kwargs = kwargs["__kw"] if "__kw" in kwargs else None
+class Argument:
+    def __init__(self, value, name=None):
+        self.value = value
+        self.name = name
         caller_frame = inspect.currentframe().f_back
         self.globals = caller_frame.f_globals
         self.locals = caller_frame.f_locals
@@ -103,55 +98,15 @@ class Arguments:
             return eval(expression, self.globals, self.locals)
         elif method == "ast":
             return ast.parse(expression).body[0].value
-        raise NotImplemented
+        raise NotImplementedError
 
     def transform(self, expr=None, method="eval"):
         if expr in self.cache[method]:
             return self.cache[method][expr]
-        if expr is not None:
-            if isinstance(expr, int):
-                self.cache[method][expr] = self.transform_one(
-                    self.args[expr], method=method
-                )
-            elif isinstance(expr, str) and expr in self.kwargs:
-                self.cache[method][expr] = self.transform_one(
-                    self.kwargs[expr], method=method
-                )
-            else:
-                self.cache[method][expr] = self.transform_one(expr, method=method)
-            return self.cache[method][expr]
-        else:
-            # return tuple of: args, kwargs, star_args, star_kwargs
-            res = []
-            part = []
-            for i, expr in enumerate(self.args):
-                self.cache[method][i] = self.transform_one(expr, method=method)
-                part.append(self.cache[method][i])
-            res.append(tuple(part))
-
-            part = {}
-            for k, expr in self.kwargs.items():
-                self.cache[method][k] = self.transform_one(expr, method=method)
-                part[k] = self.cache[method][k]
-            res.append(part)
-
-            if self.star_args:
-                self.cache[method][self.star_args] = self.transform_one(
-                    self.star_args, method=method
-                )
-                res.append(self.cache[method][self.star_args])
-            else:
-                res.append(None)
-
-            if self.star_kwargs:
-                self.cache[method][self.star_kwargs] = self.transform_one(
-                    self.star_kwargs, method=method
-                )
-                res.append(self.cache[method][self.star_kwargs])
-            else:
-                res.append(None)
-
-            return tuple(res)
+        if expr is None:
+            expr = self.value
+        self.cache[method][expr] = self.transform_one(expr, method=method)
+        return self.cache[method][expr]
 
     def evaluate(self, expr=None):
         return self.transform(expr=expr, method="eval")
@@ -160,10 +115,4 @@ class Arguments:
         return self.transform(expr=expr, method="ast")
 
     def __repr__(self):
-        parts = [
-            ", ".join(arg for arg in self.args),
-            f"*{self.star_args}" if self.star_args else "",
-            ", ".join(f"{k}={v}" for (k, v) in self.kwargs.items()),
-            f"**{self.star_kwargs}" if self.star_kwargs else "",
-        ]
-        return "Arguments({})".format(", ".join(part for part in parts if part))
+        return f"Argument({self.value})"
