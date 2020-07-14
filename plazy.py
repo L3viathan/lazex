@@ -86,7 +86,7 @@ def me(fn):
 
 class Argument:
     def __init__(self, value, name=None):
-        self.value = value
+        self.escaped = value
         self.name = name
         caller_frame = inspect.currentframe().f_back
         self.globals = caller_frame.f_globals
@@ -104,15 +104,16 @@ class Argument:
         if expr in self.cache[method]:
             return self.cache[method][expr]
         if expr is None:
-            expr = self.value
+            expr = self.escaped
         self.cache[method][expr] = self.transform_one(expr, method=method)
         return self.cache[method][expr]
 
     def evaluate(self, expr=None):
         return self.transform(expr=expr, method="eval")
 
-    def ast(self, expr=None):
-        return self.transform(expr=expr, method="ast")
+    @property
+    def ast(self):
+        return self.transform(expr=None, method="ast")
 
     def __repr__(self):
-        return f"Argument({self.value})"
+        return f"Argument({self.escaped})"

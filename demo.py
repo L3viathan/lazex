@@ -9,9 +9,9 @@ def bar(expr, *args, **kwargs):
 
     print("Arguments:", args)
     print("In this context, x is", expr.evaluate("x"))
-    print("ast:", expr.ast())
+    print("ast:", expr.ast)
 
-    if "/ 0" in expr.value:
+    if "/ 0" in expr.escaped:
         print("oh, detected bad operation, returning None instead")
         return None
 
