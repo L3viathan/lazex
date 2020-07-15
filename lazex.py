@@ -10,19 +10,6 @@ import astunparse
 registry = set()
 
 
-def get_obj_from_func(func, globals):
-    try:
-        if isinstance(func, ast.Name):
-            name = func.id
-        elif isinstance(func, ast.Attribute):
-            obj = get_obj_from_func(func.value, globals)
-            attr = func.attr
-            return getattr(obj, attr)
-        return globals.get(name) or getattr(builtins, name, None)
-    except AttributeError:
-        return None
-
-
 def build_attribute_or_name(dotted_name):
     *prefixes, last = dotted_name.split(".")
     res = last
@@ -38,42 +25,54 @@ def build_call(dotted_name, *args, **kwargs):
     return ast.Call(name, args=arguments, keywords=[])
 
 
-def patch_tree(tree, globals):
+def patch_tree(tree, globals, seen=None):
     # Walk the tree and patch function calls.
     # How do we only replace function calls to patched functions?
+    if seen is None:
+        seen = {tree}
+    elif tree in seen:
+        return tree
+    else:
+        seen.add(tree)
+    import ipdb; ipdb.set_trace()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        fn = get_obj_from_func(node.func, globals)
-        if hasattr(fn, "__wrapped__") and fn.__wrapped__ in registry:
-            node.keywords = [
-                ast.keyword(
-                    (k.arg or "__kwargs"),
+        node.keywords = [
+            ast.keyword(
+                (k.arg or "__kwargs"),
+                build_call(
+                    "lazex.build_expression",
+                    astunparse.unparse(node.func),
+                    astunparse.unparse(patch_tree(k.value, globals, seen=seen)).rstrip("\n"),
+                ),
+            )
+            for k in node.keywords
+        ]
+        new_args = []
+        for arg in node.args:
+            arg = patch_tree(arg, globals, seen=seen)
+            unparsed = astunparse.unparse(arg).rstrip("\n")
+            if not unparsed.startswith("*"):
+                new_args.append(
                     build_call(
-                        "lazex.Expression",
-                        astunparse.unparse(k.value).rstrip("\n"),
-                    ),
+                        "lazex.build_expression",
+                        astunparse.unparse(node.func),
+                        unparsed,
+                    )
                 )
-                for k in node.keywords
-            ]
-            new_args = []
-            for arg in node.args:
-                unparsed = astunparse.unparse(arg).rstrip("\n")
-                if not unparsed.startswith("*"):
-                    new_args.append(
-                        build_call("lazex.Expression", unparsed)
+            else:
+                node.keywords.append(
+                    ast.keyword(
+                        "__args",
+                        build_call(
+                            "lazex.build_expression",
+                            astunparse.unparse(node.func),
+                            unparsed[1:],
+                        ),
                     )
-                else:
-                    node.keywords.append(
-                        ast.keyword(
-                            "__args",
-                            build_call(
-                                "lazex.Expression",
-                                unparsed[1:],
-                            ),
-                        )
-                    )
-            node.args = new_args
+                )
+        node.args = new_args
 
     return tree
 
@@ -99,10 +98,19 @@ def me(fn):
     return wrapper
 
 
+def build_expression(fname, *args, **kwargs):
+    caller_frame = inspect.currentframe().f_back
+    expr = Expression(*args, _caller_frame=caller_frame, **kwargs)
+    fn = expr.evaluate(fname)
+    if hasattr(fn, "__wrapped__") and fn.__wrapped__ in registry:
+        return expr
+    return expr.evaluate()
+
+
 class Expression:
-    def __init__(self, value):
+    def __init__(self, value, _caller_frame=None):
         self.escaped = value
-        caller_frame = inspect.currentframe().f_back
+        caller_frame = _caller_frame or inspect.currentframe().f_back
         self.globals = caller_frame.f_globals
         self.locals = caller_frame.f_locals
         self._cache = defaultdict(dict)
