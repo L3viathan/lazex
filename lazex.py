@@ -115,10 +115,10 @@ class Expression:
         raise NotImplementedError
 
     def transform(self, expr=None, method="eval"):
-        if expr in self._cache[method]:
-            return self._cache[method][expr]
         if expr is None:
             expr = self.escaped
+        if expr in self._cache[method]:
+            return self._cache[method][expr]
         self._cache[method][expr] = self.transform_one(expr, method=method)
         return self._cache[method][expr]
 
