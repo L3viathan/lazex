@@ -89,31 +89,25 @@ than a hundred lines. Here's the gist:
       the function.
     - Next, we parse the source code with `ast.parse()`. We then walk over all
       nodes of the AST, until we find an `ast.Call` (a function call):
-    - Given the function's `__globals__` (the global namespace where the
-      function was defined), we retrieve the object that is being called here.*
-    - If this callee was'nt previously registered through the decorator, we
-      abort and continue with the next `ast.Call`.
-    - Otherwise, we use the `astunparse` library to get a string representation
+    - We use the `astunparse` library to get a string representation
       of all expressions that are given as positional and keyword arguments,
       and replace the corresponding nodes with yet another `ast.Call` node that
-      will instantiate a `lazex.Expression`.
+      will call `lazex.build_expression`.
     - Effectively, this will replace a call like `foo(1 + 2, x, bar=bat)` with
-      `foo(Expression("1 + 2"), Expression("x"), bar=Expression("bat"))`.
+      `foo(build_expression("foo", "1 + 2"), build_expression("foo", "x"), bar=build_expression("foo", "bat"))`.
     - The modified AST is then fed to `astunparse` to generate source code,
       that source code is executed using `compile()` and the resulting code
       object is set as the new `.__code__` attribute of the original function.
 - We then execute the patched function with the original arguments. When we
-  reach a call to a lazex function, a new `Expression` object is created.
-- Here, we use `inspect.currentframe().f_back` to get a reference to the
-  _previous_ execution frame, in order to retrieve its local and global
-  namespace (the `.f_locals` and `.f_globals` attributes on the frame object).
+  reach a call to `build_expression`, we use `inspect.currentframe().f_back` to
+  get a reference to the _previous_ execution frame, and use it to construct an
+  `Expression`. The frame helps us retrieve its local and global namespace (the
+  `.f_locals` and `.f_globals` attributes on the frame object).
 - After saving these namespaces on our `Expression` instance, we can now use it
   to access the original source code, as well as the AST for this specific
   expression. When we want to evaluate the expression, we can use the
   namespaces with `eval` in order to produce the correct values.
-
-\* This is one of the spots where something can go wrong: If a global reference
-changes between executions of the function, this will return the wrong
-callable. This is probably sufficiently rare that it won't matter most of the
-time. Similar problems occur when the callable _isn't_ in the global namespace
-(e.g. when it is defined locally).
+- After having created the `Expression` objects, we then evaluate the name of
+  the function that is supposed to be called with (possibly) escaped arguments.
+  If it is _not_ a registered lazex function, we evaluate the arguments
+  immediately.
