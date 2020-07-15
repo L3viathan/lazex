@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "lazex"
+version = "0.1.0"
+description = "Allow functions to examine and modify the AST of their arguments"
+authors = ["L3viathan <git@l3vi.de>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+astunparse = "^1.6.3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.4.3"
+ipdb = "^0.13.3"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
