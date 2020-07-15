@@ -1,16 +1,16 @@
-import plazy
+import lazex
 
-@plazy.me
+@lazex.me
 def foo(something):
     return something.escaped
 
-@plazy.me
+@lazex.me
 def bar():
     return foo(x / 0)
 
 def test_local_scope():
     x = 7
-    arg = plazy.Expression("x+3")
+    arg = lazex.Expression("x+3")
     assert arg.evaluate() == 10
 
 

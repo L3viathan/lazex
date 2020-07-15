@@ -50,7 +50,7 @@ def patch_tree(tree, globals):
                 ast.keyword(
                     (k.arg or "__kwargs"),
                     build_call(
-                        "plazy.Expression",
+                        "lazex.Expression",
                         astunparse.unparse(k.value).rstrip("\n"),
                     ),
                 )
@@ -61,14 +61,14 @@ def patch_tree(tree, globals):
                 unparsed = astunparse.unparse(arg).rstrip("\n")
                 if not unparsed.startswith("*"):
                     new_args.append(
-                        build_call("plazy.Expression", unparsed)
+                        build_call("lazex.Expression", unparsed)
                     )
                 else:
                     node.keywords.append(
                         ast.keyword(
                             "__args",
                             build_call(
-                                "plazy.Expression",
+                                "lazex.Expression",
                                 unparsed[1:],
                             ),
                         )
@@ -83,7 +83,7 @@ def me(fn):
     # decorator
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if hasattr(fn, "_plazy_patched") and fn._plazy_patched:
+        if hasattr(fn, "_lazex_patched") and fn._lazex_patched:
             return fn(*args, **kwargs)
         source = inspect.getsource(fn)
         _, def_, rest = source.partition("def ")
@@ -93,7 +93,7 @@ def me(fn):
         result = astunparse.unparse(tree)
         code = compile(result, fn.__code__.co_filename, "exec")
         fn.__code__ = code.co_consts[0]
-        fn._plazy_patched = True
+        fn._lazex_patched = True
         return fn(*args, **kwargs)
 
     return wrapper

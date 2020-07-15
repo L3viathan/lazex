@@ -1,12 +1,12 @@
 import collections
-import plazy
+import lazex
 
 
-@plazy.me
+@lazex.me
 def bar(*args, **kwargs):
     print("In bar")
     expr = args[0]
-    assert isinstance(expr, plazy.Expression)
+    assert isinstance(expr, lazex.Expression)
 
     print("Expressions:", args, kwargs)
     print("In this context, x is", expr.evaluate("x"))
@@ -20,7 +20,7 @@ def bar(*args, **kwargs):
     return y
 
 
-@plazy.me
+@lazex.me
 def foo():
     x = 7
     c = collections.Counter()
