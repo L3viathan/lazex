@@ -34,8 +34,7 @@ def patch_tree(tree, globals, seen=None):
         return tree
     else:
         seen.add(tree)
-    import ipdb; ipdb.set_trace()
-    for node in ast.walk(tree):
+    for node in list(ast.walk(tree)):  # list() to not consider new nodes
         if not isinstance(node, ast.Call):
             continue
         node.keywords = [
