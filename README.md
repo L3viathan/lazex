@@ -40,6 +40,41 @@ Here's the catch: In order for this to work, the calling function must _also_
 have been decorated with `latex.me`. This is sadly a consequence of the fact
 that what we're doing here is not usually possible in Python.
 
+----
+
+Even without this decorator, you can still use `lazex` to define expressions in
+a given context that you may or may not want to evaluate later:
+
+```python
+def outer():
+    x = 7
+    y = lazex.Expression('x * 14')
+    inner(y)
+
+def inner(expr):
+    import random
+    if random.random() > 0.5:
+        print(expr.evaluate())
+```
+
+While this toy example may seem silly, you can wrap arbitrarily complex [expressions](https://docs.python.org/3/reference/expressions.html). For example, you could delay a complex function call that might need to occur:
+
+```python
+id_ = '1274897d129d24'
+doc = complex.framework.get_document_by_id(id_, reticulate_splines='force')
+delete = lazex.Expression(
+    'complex.framework.delete_from_db('
+    'doc, id_, safe_delete=True, cleanup=False,'
+    'restore_function=complex.framework.restore_with_trick).confirmation_id'
+)
+process_document(doc, deleteexpr=delete)
+```
+
+Here, the `process_document` function may at some point decide that it needs to
+delete the document, and can just call `delete.evaluate()`. Sure, this is also
+solvable with a simple lambda, but if you were looking for straightforward,
+idiomatic solutions you've come to the wrong place.
+
 ## Technical details
 
 If you want to know how this works, just look at `lazex.py`, it's barely more
