@@ -1,5 +1,7 @@
 # lazex
 
+![lazex logo](https://raw.githubusercontent.com/L3viathan/lazex/master/logo.jpg)
+
 `lazex` (short for "lazy expressions") is a small library that enables your
 functions to customize how arguments are given to it. For example, such a
 function `foo` that you call with an expression, say `foo(2 + 3)` does not just
