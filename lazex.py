@@ -14,19 +14,25 @@ def unparse(something):
     return astunparse.unparse(something).rstrip("\n")
 
 
-def build_attribute_or_name(dotted_name):
-    *prefixes, last = dotted_name.split(".")
-    res = last
-    for prefix in prefixes:
-        res = ast.Attribute(ast.Name(prefix), res)
-    return res
+def build_expression_call(*args, **kwargs):
+    call = ast.Attribute(
+        value=ast.Call(
+            func=ast.Name(
+                id="__import__",
+                ctx=ast.Load(),
+            ),
+            args=[
+                ast.Constant(value="lazex", kind=None),
+            ],
+            keywords=[],
+        ),
+        attr="build_expression",
+        ctx=ast.Load(),
+    )
 
-
-def build_call(dotted_name, *args, **kwargs):
-    name = build_attribute_or_name(dotted_name)
     arguments = []
     arguments.extend(ast.Constant(arg, kind=None) for arg in args)
-    return ast.Call(name, args=arguments, keywords=[])
+    return ast.Call(call, args=arguments, keywords=[])
 
 
 def patch_tree(tree, globals, seen=None):
@@ -44,8 +50,7 @@ def patch_tree(tree, globals, seen=None):
         node.keywords = [
             ast.keyword(
                 (k.arg or "__kwargs"),
-                build_call(
-                    "lazex.build_expression",
+                build_expression_call(
                     unparse(node.func),
                     unparse(patch_tree(k.value, globals, seen=seen)),
                 ),
@@ -58,14 +63,14 @@ def patch_tree(tree, globals, seen=None):
             unparsed = unparse(arg)
             if not unparsed.startswith("*"):
                 new_args.append(
-                    build_call("lazex.build_expression", unparse(node.func), unparsed)
+                    build_expression_call(unparse(node.func), unparsed)
                 )
             else:
                 node.keywords.append(
                     ast.keyword(
                         "__args",
-                        build_call(
-                            "lazex.build_expression", unparse(node.func), unparsed[1:]
+                        build_expression_call(
+                            unparse(node.func), unparsed[1:]
                         ),
                     )
                 )
@@ -126,7 +131,9 @@ class Expression:
                     isinstance(arg, ast.Call)
                     and isinstance(arg.func, ast.Attribute)
                     and arg.func.attr == "build_expression"
-                    and arg.func.value.id == "lazex"
+                    and isinstance(arg.func.value, ast.Call)
+                    and arg.func.value.func.id == "__import__"
+                    and arg.func.value.args[0].value == "lazex"
                 ):
                     newargs.append(ast.parse(arg.args[1].value).body[0].value)
                 else:

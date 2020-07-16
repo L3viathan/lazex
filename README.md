@@ -11,9 +11,6 @@ In order to use this, you need to import the library:
 
     import lazex
 
-Make sure to import it exactly like that and not under a different name,
-otherwise it will not work.
-
 Next, decorate your functions with the decorator `lazex.me`. This is an
 identity function (the equivalent of `lambda x: x`):
 
@@ -111,3 +108,5 @@ than a hundred lines. Here's the gist:
   the function that is supposed to be called with (possibly) escaped arguments.
   If it is _not_ a registered lazex function, we evaluate the arguments
   immediately.
+- Also, we search the `Expression`'s AST for our `build_expression` hooks and
+  remove them: They are unnecessary here and just leak implementation details.
