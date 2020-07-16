@@ -10,6 +10,10 @@ import astunparse
 registry = set()
 
 
+def unparse(something):
+    return astunparse.unparse(something).rstrip("\n")
+
+
 def build_attribute_or_name(dotted_name):
     *prefixes, last = dotted_name.split(".")
     res = last
@@ -42,8 +46,8 @@ def patch_tree(tree, globals, seen=None):
                 (k.arg or "__kwargs"),
                 build_call(
                     "lazex.build_expression",
-                    astunparse.unparse(node.func),
-                    astunparse.unparse(patch_tree(k.value, globals, seen=seen)).rstrip("\n"),
+                    unparse(node.func),
+                    unparse(patch_tree(k.value, globals, seen=seen)),
                 ),
             )
             for k in node.keywords
@@ -51,23 +55,17 @@ def patch_tree(tree, globals, seen=None):
         new_args = []
         for arg in node.args:
             arg = patch_tree(arg, globals, seen=seen)
-            unparsed = astunparse.unparse(arg).rstrip("\n")
+            unparsed = unparse(arg)
             if not unparsed.startswith("*"):
                 new_args.append(
-                    build_call(
-                        "lazex.build_expression",
-                        astunparse.unparse(node.func),
-                        unparsed,
-                    )
+                    build_call("lazex.build_expression", unparse(node.func), unparsed)
                 )
             else:
                 node.keywords.append(
                     ast.keyword(
                         "__args",
                         build_call(
-                            "lazex.build_expression",
-                            astunparse.unparse(node.func),
-                            unparsed[1:],
+                            "lazex.build_expression", unparse(node.func), unparsed[1:]
                         ),
                     )
                 )
@@ -87,10 +85,12 @@ def me(fn):
         _, def_, rest = source.partition("def ")
         source = def_ + rest
         tree = ast.parse(source)
-        tree = patch_tree(tree, fn.__globals__,)
-        result = astunparse.unparse(tree)
+        tree = patch_tree(tree, fn.__globals__)
+        result = unparse(tree)
         code = compile(result, fn.__code__.co_filename, "exec")
-        fn.__code__ = code.co_consts[0]
+        fn.__code__ = next(  # I hope this will always be right
+            const for const in code.co_consts if isinstance(const, type(fn.__code__))
+        )
         fn._lazex_patched = True
         return fn(*args, **kwargs)
 
@@ -113,6 +113,26 @@ class Expression:
         self.globals = caller_frame.f_globals
         self.locals = caller_frame.f_locals
         self._cache = defaultdict(dict)
+        self.strip_internal_nodes()
+
+    def strip_internal_nodes(self):
+        AST = self.ast
+        for node in list(ast.walk(AST)):
+            if not isinstance(node, ast.Call):
+                continue
+            newargs = []
+            for arg in node.args:
+                if (
+                    isinstance(arg, ast.Call)
+                    and isinstance(arg.func, ast.Attribute)
+                    and arg.func.attr == "build_expression"
+                    and arg.func.value.id == "lazex"
+                ):
+                    newargs.append(ast.parse(arg.args[1].value).body[0].value)
+                else:
+                    newargs.append(arg)
+            node.args = newargs
+        self.escaped = unparse(AST)
 
     def transform_one(self, expression, method="eval"):
         if method == "eval":
