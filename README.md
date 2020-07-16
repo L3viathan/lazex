@@ -1,5 +1,3 @@
-# lazex
-
 ![lazex logo](https://raw.githubusercontent.com/L3viathan/lazex/master/logo.jpg)
 
 `lazex` (short for "lazy expressions") is a small library that enables your
